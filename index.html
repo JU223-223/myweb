@@ -4,9 +4,147 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>货架缺货统计工具 · 拖选版</title>
-    <script src="https://cdn.tailwindcss.com">
-    </script>
     <style>
+        /* ===== 本地替代 Tailwind CDN（无需联网） ===== */
+
+        /* Reset */
+        *, *::before, *::after { box-sizing: border-box; border-width: 0; border-style: solid; border-color: #e5e7eb; }
+        body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif; }
+        button { cursor: pointer; font: inherit; background-color: transparent; background-image: none; }
+        textarea, select { font: inherit; }
+
+        /* Display */
+        .flex { display: flex; }
+        .hidden { display: none; }
+
+        /* Flex */
+        .items-center { align-items: center; }
+        .justify-between { justify-content: space-between; }
+        .flex-wrap { flex-wrap: wrap; }
+        .gap-1 { gap: 0.25rem; }
+        .gap-1\.5 { gap: 0.375rem; }
+        .gap-2 { gap: 0.5rem; }
+
+        /* Width / Height */
+        .w-full { width: 100%; }
+        .w-4 { width: 1rem; }
+        .w-8 { width: 2rem; }
+        .h-4 { height: 1rem; }
+        .h-8 { height: 2rem; }
+
+        /* Max-width */
+        .max-w-6xl { max-width: 72rem; }
+
+        /* Margin */
+        .mx-auto { margin-left: auto; margin-right: auto; }
+        .mt-1 { margin-top: 0.25rem; }
+        .mt-2 { margin-top: 0.5rem; }
+        .mb-1 { margin-bottom: 0.25rem; }
+        .mb-2 { margin-bottom: 0.5rem; }
+        .mb-3 { margin-bottom: 0.75rem; }
+        .mb-5 { margin-bottom: 1.25rem; }
+
+        /* Padding */
+        .p-2\.5 { padding: 0.625rem; }
+        .px-1 { padding-left: 0.25rem; padding-right: 0.25rem; }
+        .px-2 { padding-left: 0.5rem; padding-right: 0.5rem; }
+        .px-2\.5 { padding-left: 0.625rem; padding-right: 0.625rem; }
+        .px-3 { padding-left: 0.75rem; padding-right: 0.75rem; }
+        .px-4 { padding-left: 1rem; padding-right: 1rem; }
+        .px-5 { padding-left: 1.25rem; padding-right: 1.25rem; }
+        .py-0\.5 { padding-top: 0.125rem; padding-bottom: 0.125rem; }
+        .py-1 { padding-top: 0.25rem; padding-bottom: 0.25rem; }
+        .py-1\.5 { padding-top: 0.375rem; padding-bottom: 0.375rem; }
+        .py-2\.5 { padding-top: 0.625rem; padding-bottom: 0.625rem; }
+        .py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+        .pt-5 { padding-top: 1.25rem; }
+        .pb-4 { padding-bottom: 1rem; }
+
+        /* Typography */
+        .text-center { text-align: center; }
+        .text-xs { font-size: 0.75rem; line-height: 1rem; }
+        .text-sm { font-size: 0.875rem; line-height: 1.25rem; }
+        .text-base { font-size: 1rem; line-height: 1.5rem; }
+        .text-lg { font-size: 1.125rem; line-height: 1.75rem; }
+        .text-2xl { font-size: 1.5rem; line-height: 2rem; }
+        .font-medium { font-weight: 500; }
+        .font-semibold { font-weight: 600; }
+        .font-bold { font-weight: 700; }
+        .tracking-tight { letter-spacing: -0.025em; }
+        .whitespace-nowrap { white-space: nowrap; }
+
+        /* Text colors */
+        .text-white { color: #fff; }
+        .text-gray-400 { color: #9ca3af; }
+        .text-gray-500 { color: #6b7280; }
+        .text-gray-600 { color: #4b5563; }
+        .text-gray-700 { color: #374151; }
+        .text-gray-800 { color: #1f2937; }
+        .text-blue-600 { color: #2563eb; }
+        .text-red-600 { color: #dc2626; }
+        .text-orange-500 { color: #f97316; }
+
+        /* Background colors */
+        .bg-white { background-color: #fff; }
+        .bg-gray-50 { background-color: #f9fafb; }
+        .bg-gray-100 { background-color: #f3f4f6; }
+        .bg-gray-800 { background-color: #1f2937; }
+        .bg-blue-100 { background-color: #dbeafe; }
+        .bg-blue-500 { background-color: #3b82f6; }
+        .bg-red-100 { background-color: #fee2e2; }
+
+        /* Border */
+        .border { border-width: 1px; }
+        .border-gray-200 { border-color: #e5e7eb; }
+        .border-gray-300 { border-color: #d1d5db; }
+        .border-blue-200 { border-color: #bfdbfe; }
+
+        /* Border radius */
+        .rounded-md { border-radius: 0.375rem; }
+        .rounded-lg { border-radius: 0.5rem; }
+        .rounded-full { border-radius: 9999px; }
+
+        /* Position */
+        .fixed { position: fixed; }
+        .relative { position: relative; }
+        .top-5 { top: 1.25rem; }
+        .left-1\/2 { left: 50%; }
+        .z-50 { z-index: 50; }
+
+        /* Misc */
+        .min-h-screen { min-height: 100vh; }
+        .antialiased { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+        .opacity-0 { opacity: 0; }
+        .pointer-events-none { pointer-events: none; }
+        .shadow-sm { box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05); }
+        .shadow-lg { box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1); }
+        .transition { transition: all 0.15s ease; }
+        .resize-none { resize: none; }
+
+        /* Hover */
+        .hover\:bg-gray-50:hover { background-color: #f9fafb; }
+        .hover\:bg-blue-600:hover { background-color: #2563eb; }
+        .hover\:border-blue-400:hover { border-color: #60a5fa; }
+
+        /* Focus */
+        .focus\:outline-none:focus { outline: none; }
+        .focus\:ring-2:focus { box-shadow: 0 0 0 2px #3b82f6; }
+
+        /* Active */
+        .active\:scale-95:active { transform: scale(0.95); }
+
+        /* Responsive sm: (≥640px) */
+        @media (min-width: 640px) {
+            .sm\:inline { display: inline; }
+            .sm\:text-sm { font-size: 0.875rem; line-height: 1.25rem; }
+            .sm\:text-base { font-size: 1rem; line-height: 1.5rem; }
+            .sm\:py-4 { padding-top: 1rem; padding-bottom: 1rem; }
+            .sm\:mb-3 { margin-bottom: 0.75rem; }
+            .sm\:gap-3 { gap: 0.75rem; }
+        }
+
+        /* ===== 以下为原有自定义样式 ===== */
+
         /* 底部固定栏留空 */
         body {
             padding-bottom: 200px;
