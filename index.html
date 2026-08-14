@@ -191,12 +191,26 @@
             <textarea id="recognize-input" rows="3" placeholder="粘贴文字，例如：&#10;拼豆F5拼豆F13拼豆F14拼豆F15拼豆C2拼豆C3拼豆C6&#10;支持格式：拼豆F5、F5、f5、F5,F13 等" class="w-full border border-blue-200 rounded-md p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none bg-white"></textarea>
             <div class="flex items-center justify-between mt-2">
                 <span id="recognize-status" class="text-xs text-gray-400">支持 Ctrl+Enter 快捷识别</span>
-                <button onclick="recognizeText()" class="flex items-center gap-1 px-4 py-1.5 bg-blue-500 text-white rounded-md hover:bg-blue-600 active:scale-95 transition text-sm font-medium shadow-sm">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    识别
-                </button>
+                <div class="flex items-center gap-2">
+                    <button onclick="pasteRecognizeInput()" class="flex items-center gap-1 px-3 py-1.5 border border-gray-300 rounded-md text-gray-600 hover:bg-gray-50 active:scale-95 transition text-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                        粘贴
+                    </button>
+                    <button onclick="clearRecognizeInput()" class="flex items-center gap-1 px-3 py-1.5 border border-gray-300 rounded-md text-gray-600 hover:bg-gray-50 active:scale-95 transition text-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                        清空
+                    </button>
+                    <button onclick="recognizeText()" class="flex items-center gap-1 px-4 py-1.5 bg-blue-500 text-white rounded-md hover:bg-blue-600 active:scale-95 transition text-sm font-medium shadow-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        识别
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -458,6 +472,25 @@
             }
         }
 
+        function clearRecognizeInput() {
+            recognizeInput.value = '';
+            recognizeStatus.textContent = '支持 Ctrl+Enter 快捷识别';
+            recognizeStatus.className = 'text-xs text-gray-400';
+            recognizeInput.focus();
+        }
+
+        function pasteRecognizeInput() {
+            navigator.clipboard.readText().then(text => {
+                recognizeInput.value = text;
+                recognizeInput.focus();
+                showToast('✅ 已粘贴剪贴板内容');
+            }).catch(() => {
+                // 降级方案：聚焦输入框，提示用户手动 Ctrl+V
+                recognizeInput.focus();
+                showToast('⚠️ 无法自动粘贴，请按 Ctrl+V 手动粘贴');
+            });
+        }
+
         // ============================================================
         //  4. 拖选引擎
         // ============================================================
@@ -701,6 +734,8 @@
         window.clearAll = clearAll;
         window.selectZone = selectZone;
         window.recognizeText = recognizeText;
+        window.clearRecognizeInput = clearRecognizeInput;
+        window.pasteRecognizeInput = pasteRecognizeInput;
 
         console.log('📦 货架缺货统计工具已加载 (支持鼠标拖选 + 模组识别)');
     </script>
