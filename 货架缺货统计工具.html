@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>货架缺货统计工具 · 拖选版</title>
+    <script src="https://cdn.tailwindcss.com">
+    </script>
+    <style>
+        /* 底部固定栏留空 */
+        body {
+            padding-bottom: 200px;
+            user-select: none;
+        }
+
+        /* 货位按钮基础样式 */
+        .location-btn {
+            transition: background-color 0.12s ease, border-color 0.12s ease, transform 0.08s ease;
+            user-select: none;
+            cursor: pointer;
+            position: relative;
+        }
+        .location-btn:hover {
+            transform: scale(1.02);
+            border-color: #60a5fa;
+        }
+        .location-btn.selected {
+            background-color: #ef4444;
+            color: #fff;
+            border-color: #dc2626;
+        }
+        .location-btn.selected:hover {
+            background-color: #dc2626;
+            border-color: #b91c1c;
+        }
+        /* 拖选时的"高亮经过"效果（轻量过渡） */
+        .location-btn.drag-hover {
+            transform: scale(1.04);
+            box-shadow: 0 0 0 2px #3b82f6, 0 0 8px rgba(59, 130, 246, 0.3);
+            z-index: 2;
+        }
+        .location-btn.selected.drag-hover {
+            box-shadow: 0 0 0 2px #f97316, 0 0 8px rgba(239, 68, 68, 0.3);
+        }
+        /* 识别命中时的闪烁高亮 */
+        .location-btn.flash {
+            animation: flashHighlight 0.8s ease;
+        }
+        @keyframes flashHighlight {
+            0%   { box-shadow: 0 0 0 3px #3b82f6, 0 0 16px rgba(59,130,246,0.6); transform: scale(1.12); }
+            100% { box-shadow: 0 0 0 0 transparent; transform: scale(1); }
+        }
+
+        /* 分区卡片 */
+        .zone-card {
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 18px 20px 20px;
+            margin-bottom: 18px;
+            transition: box-shadow 0.2s;
+        }
+        .zone-card:hover {
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+        }
+
+        /* 底部固定栏 */
+        .bottom-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: #ffffff;
+            box-shadow: 0 -2px 16px rgba(0, 0, 0, 0.07);
+            z-index: 50;
+            border-top: 1px solid #e5e7eb;
+            backdrop-filter: blur(2px);
+        }
+
+        /* 空状态图标 */
+        .empty-icon {
+            opacity: 0.3;
+        }
+
+        /* 结果文本框 */
+        #result {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            background: #f9fafb;
+            min-height: 72px;
+            line-height: 1.6;
+        }
+        #result:focus {
+            outline: none;
+            ring: 2px solid #3b82f6;
+        }
+
+        /* 识别输入框 */
+        #recognize-input {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            user-select: text;
+        }
+
+        /* Toast */
+        #toast {
+            transition: opacity 0.25s ease, transform 0.25s ease;
+            transform: translateX(-50%) translateY(-6px);
+        }
+        #toast.show {
+            opacity: 1 !important;
+            transform: translateX(-50%) translateY(0) !important;
+            pointer-events: auto !important;
+        }
+
+        /* 响应式：小屏按钮更紧凑 */
+        @media (max-width: 640px) {
+            .location-btn {
+                font-size: 0.7rem;
+                padding: 0.3rem 0.2rem;
+            }
+            .zone-card {
+                padding: 12px 12px 14px;
+            }
+            .bottom-bar {
+                padding-bottom: env(safe-area-inset-bottom);
+            }
+            body {
+                padding-bottom: 190px;
+            }
+        }
+
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 8px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #d1d5db;
+            border-radius: 8px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #9ca3af;
+        }
+
+        /* 全选按钮点击反馈 */
+        .zone-select-all:active {
+            transform: scale(0.95);
+        }
+
+        /* 按钮网格自适应 */
+        .btn-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
+            gap: 6px;
+        }
+        @media (min-width: 640px) {
+            .btn-grid {
+                grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
+                gap: 8px;
+            }
+        }
+        @media (min-width: 1024px) {
+            .btn-grid {
+                grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+                gap: 8px;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen antialiased">
+
+    <div class="max-w-6xl mx-auto px-4 pt-5 pb-4">
+        <!-- 标题 -->
+        <div class="text-center mb-5">
+            <h1 class="text-2xl font-bold text-gray-800 tracking-tight">📦 货架缺货统计</h1>
+            <p class="text-gray-500 mt-1 text-sm">点击切换 · 按住拖选批量标记 · 自动生成缺货清单</p>
+        </div>
+
+        <!-- ========== 模组识别面板 ========== -->
+        <div class="zone-card" style="border-color: #bfdbfe; background: #eff6ff;">
+            <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2">
+                    <span class="font-bold text-gray-800 text-base">🔍 模组识别</span>
+                    <span class="bg-blue-100 text-blue-600 text-xs px-2 py-0.5 rounded-full">本地识别</span>
+                </div>
+                <span class="text-xs text-gray-400 hidden sm:inline">粘贴文字 → 点识别 → 自动选中对应货位</span>
+            </div>
+            <textarea id="recognize-input" rows="3" placeholder="粘贴文字，例如：&#10;拼豆F5拼豆F13拼豆F14拼豆F15拼豆C2拼豆C3拼豆C6&#10;支持格式：拼豆F5、F5、f5、F5,F13 等" class="w-full border border-blue-200 rounded-md p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none bg-white"></textarea>
+            <div class="flex items-center justify-between mt-2">
+                <span id="recognize-status" class="text-xs text-gray-400">支持 Ctrl+Enter 快捷识别</span>
+                <button onclick="recognizeText()" class="flex items-center gap-1 px-4 py-1.5 bg-blue-500 text-white rounded-md hover:bg-blue-600 active:scale-95 transition text-sm font-medium shadow-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    识别
+                </button>
+            </div>
+        </div>
+
+        <!-- 货位选择区 -->
+        <div id="shelf-container"></div>
+    </div>
+
+    <!-- ========== 底部固定栏 ========== -->
+    <div class="bottom-bar">
+        <div class="max-w-6xl mx-auto px-4 py-3 sm:py-4">
+            <!-- 操作行 -->
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-2 sm:mb-3">
+                <div class="flex items-center gap-2">
+                    <span class="font-semibold text-gray-800 text-sm sm:text-base">📋 缺货清单</span>
+                    <span id="count-badge" class="bg-gray-100 text-gray-500 text-xs sm:text-sm px-2.5 py-0.5 rounded-full font-medium transition">暂无选中</span>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+                    <!-- 分隔符 -->
+                    <div class="flex items-center gap-1.5">
+                        <label class="text-xs sm:text-sm text-gray-500 whitespace-nowrap">分隔符</label>
+                        <select id="separator" class="border border-gray-300 rounded-md px-2 py-1 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                            <option value=",">逗号 ,</option>
+                            <option value=" ">空格</option>
+                            <option value="，">中文逗号 ，</option>
+                            <option value=";">分号 ;</option>
+                            <option value="\n">换行</option>
+                            <option value="-">短横 -</option>
+                            <option value="/">斜杠 /</option>
+                            <option value="|">竖线 |</option>
+                        </select>
+                    </div>
+
+                    <button onclick="copyResult()" class="flex items-center gap-1 px-3 py-1.5 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition text-xs sm:text-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                        复制
+                    </button>
+
+                    <button onclick="clearAll()" class="flex items-center gap-1 px-3 py-1.5 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition text-xs sm:text-sm">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        清空
+                    </button>
+                </div>
+            </div>
+
+            <!-- 结果显示区 -->
+            <div id="result-area" class="relative">
+                <!-- 空状态 -->
+                <div id="empty-state" class="text-center py-3 text-gray-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8 mx-auto mb-1 empty-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    </svg>
+                    <p class="text-xs sm:text-sm">点击货位标记缺货，或按住鼠标拖选批量标记</p>
+                </div>
+                <!-- 结果文本框 -->
+                <textarea id="result" readonly class="hidden w-full border border-gray-200 rounded-md p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none bg-gray-50" rows="2"></textarea>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="fixed top-5 left-1/2 bg-gray-800 text-white px-5 py-2.5 rounded-lg shadow-lg opacity-0 pointer-events-none z-50 text-sm font-medium">
+        ✅ 复制成功！
+    </div>
+
+    <script>
+        // ============================================================
+        //  1. 数据
+        // ============================================================
+        const shelves = {
+            'A': 26,
+            'B': 32,
+            'C': 29,
+            'D': 26,
+            'E': 24,
+            'F': 25,
+            'G': 21,
+            'H': 23,
+            'M': 15
+        };
+
+        const selected = new Set();
+
+        // ============================================================
+        //  2. DOM 引用
+        // ============================================================
+        const container = document.getElementById('shelf-container');
+        const resultEl = document.getElementById('result');
+        const emptyEl = document.getElementById('empty-state');
+        const badgeEl = document.getElementById('count-badge');
+        const sepSelect = document.getElementById('separator');
+        const toastEl = document.getElementById('toast');
+        const recognizeInput = document.getElementById('recognize-input');
+        const recognizeStatus = document.getElementById('recognize-status');
+
+        // ============================================================
+        //  3. 核心功能
+        // ============================================================
+        function updateResult() {
+            const sep = sepSelect.value === '\\n' ? '\n' : sepSelect.value;
+            const sorted = Array.from(selected).sort((a, b) => {
+                const la = a.match(/[A-Z]+/)[0],
+                    na = parseInt(a.match(/\d+/)[0]);
+                const lb = b.match(/[A-Z]+/)[0],
+                    nb = parseInt(b.match(/\d+/)[0]);
+                if (la !== lb) return la.localeCompare(lb);
+                return na - nb;
+            });
+            const text = sorted.join(sep);
+
+            if (selected.size === 0) {
+                resultEl.classList.add('hidden');
+                emptyEl.classList.remove('hidden');
+                badgeEl.textContent = '暂无选中';
+                badgeEl.className = 'bg-gray-100 text-gray-500 text-xs sm:text-sm px-2.5 py-0.5 rounded-full font-medium';
+            } else {
+                resultEl.classList.remove('hidden');
+                emptyEl.classList.add('hidden');
+                resultEl.value = text;
+                badgeEl.textContent = `已选 ${selected.size} 个`;
+                badgeEl.className = 'bg-red-100 text-red-600 text-xs sm:text-sm px-2.5 py-0.5 rounded-full font-medium';
+            }
+        }
+
+        function toggleLocation(code, btn) {
+            if (selected.has(code)) {
+                selected.delete(code);
+                btn.classList.remove('selected');
+            } else {
+                selected.add(code);
+                btn.classList.add('selected');
+            }
+            updateResult();
+        }
+
+        function selectZone(zone) {
+            // 结束拖选
+            endDrag();
+            const count = shelves[zone];
+            for (let i = 1; i <= count; i++) {
+                const code = zone + i;
+                selected.add(code);
+                const btn = document.querySelector(`[data-code="${code}"]`);
+                if (btn) btn.classList.add('selected');
+            }
+            updateResult();
+        }
+
+        function clearAll() {
+            endDrag();
+            selected.clear();
+            document.querySelectorAll('.location-btn').forEach(btn => btn.classList.remove('selected'));
+            updateResult();
+        }
+
+        function copyResult() {
+            const text = resultEl.value;
+            if (!text) { showToast('暂无内容可复制'); return; }
+            navigator.clipboard.writeText(text).then(() => showToast('✅ 复制成功！'))
+                .catch(() => {
+                    resultEl.select();
+                    document.execCommand('copy');
+                    showToast('✅ 复制成功！');
+                });
+        }
+
+        function showToast(msg) {
+            toastEl.textContent = msg;
+            toastEl.classList.add('show');
+            clearTimeout(toastEl._timer);
+            toastEl._timer = setTimeout(() => toastEl.classList.remove('show'), 2200);
+        }
+
+        // ============================================================
+        //  3.5 模组识别（本地解析）
+        // ============================================================
+        function recognizeText() {
+            const raw = recognizeInput.value.trim();
+            if (!raw) {
+                showToast('⚠️ 请先输入需要识别的文字');
+                recognizeStatus.textContent = '⚠️ 输入为空';
+                recognizeStatus.className = 'text-xs text-orange-500';
+                return;
+            }
+
+            // 正则提取所有"字母+数字"组合（如 F5、F13、C2），不区分大小写
+            const matches = raw.match(/[A-Za-z]+\d+/g);
+            if (!matches || matches.length === 0) {
+                showToast('⚠️ 未识别到任何货位编号');
+                recognizeStatus.textContent = '⚠️ 未识别到货位编号';
+                recognizeStatus.className = 'text-xs text-orange-500';
+                return;
+            }
+
+            // 转大写 + 去重（保持顺序）
+            const codes = [];
+            const seen = new Set();
+            matches.forEach(m => {
+                const upper = m.toUpperCase();
+                if (!seen.has(upper)) {
+                    seen.add(upper);
+                    codes.push(upper);
+                }
+            });
+
+            // 清空当前选中
+            selected.clear();
+            document.querySelectorAll('.location-btn.selected').forEach(btn => btn.classList.remove('selected'));
+
+            const found = [];
+            const notFound = [];
+
+            codes.forEach(code => {
+                const zone = code.match(/[A-Z]+/)[0];
+                const num = parseInt(code.match(/\d+/)[0]);
+
+                if (shelves[zone] && num >= 1 && num <= shelves[zone]) {
+                    selected.add(code);
+                    const btn = document.querySelector(`[data-code="${code}"]`);
+                    if (btn) {
+                        btn.classList.add('selected');
+                        // 闪烁高亮
+                        btn.classList.remove('flash');
+                        void btn.offsetWidth; // 触发重绘以重启动画
+                        btn.classList.add('flash');
+                        setTimeout(() => btn.classList.remove('flash'), 900);
+                    }
+                    found.push(code);
+                } else {
+                    notFound.push(code);
+                }
+            });
+
+            updateResult();
+
+            // 状态提示
+            if (notFound.length > 0) {
+                recognizeStatus.innerHTML = `✅ 已选中 <b class="text-blue-600">${found.length}</b> 个 · ⚠️ 未找到 <b class="text-orange-500">${notFound.length}</b> 个：${notFound.join(' ')}`;
+                recognizeStatus.className = 'text-xs text-gray-500';
+                showToast(`✅ 识别 ${found.length} 个，未找到 ${notFound.length} 个`);
+            } else {
+                recognizeStatus.innerHTML = `✅ 成功识别并选中 <b class="text-blue-600">${found.length}</b> 个货位：${found.join(' ')}`;
+                recognizeStatus.className = 'text-xs text-gray-500';
+                showToast(`✅ 成功识别 ${found.length} 个货位`);
+            }
+
+            // 滚动到第一个命中的货位
+            if (found.length > 0) {
+                const firstBtn = document.querySelector(`[data-code="${found[0]}"]`);
+                if (firstBtn) {
+                    setTimeout(() => firstBtn.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
+                }
+            }
+        }
+
+        // ============================================================
+        //  4. 拖选引擎
+        // ============================================================
+        let drag = {
+            active: false, // 鼠标是否按下
+            started: false, // 是否已进入拖选模式（移动超过阈值）
+            startBtn: null, // 起始按钮
+            startState: false, // 起始按钮的选中状态
+            startX: 0,
+            startY: 0,
+            threshold: 6, // 像素阈值
+            targetState: false, // 拖选目标状态（与起始相反）
+            _lastProcessed: null, // 避免同一按钮重复处理
+        };
+
+        function endDrag() {
+            if (drag.active) {
+                drag.active = false;
+                drag.started = false;
+                drag.startBtn = null;
+                drag._lastProcessed = null;
+                document.body.style.cursor = '';
+                // 移除所有拖选高亮
+                document.querySelectorAll('.location-btn.drag-hover').forEach(el => el.classList.remove('drag-hover'));
+            }
+        }
+
+        function processButton(btn, targetState) {
+            if (!btn) return;
+            const code = btn.dataset.code;
+            if (!code) return;
+            // 避免同一按钮在拖选过程中被反复处理（但状态变更后需要允许再次处理）
+            // 这里我们允许重复处理，因为状态变更后 selected.has 会变化
+            const currentlySelected = selected.has(code);
+            if (currentlySelected === targetState) return; // 已经是目标状态，跳过
+
+            if (targetState) {
+                selected.add(code);
+                btn.classList.add('selected');
+            } else {
+                selected.delete(code);
+                btn.classList.remove('selected');
+            }
+            // 轻量反馈：闪一下高亮
+            btn.classList.add('drag-hover');
+            clearTimeout(btn._dragHoverTimer);
+            btn._dragHoverTimer = setTimeout(() => btn.classList.remove('drag-hover'), 180);
+
+            updateResult();
+        }
+
+        // ---- 事件绑定 ----
+        function initDragEvents() {
+            // 用事件委托监听所有按钮的 mousedown
+            container.addEventListener('mousedown', function(e) {
+                const btn = e.target.closest('.location-btn');
+                if (!btn) return;
+                // 阻止文本选择
+                e.preventDefault();
+
+                // 如果已经在拖选中，先结束
+                if (drag.active) endDrag();
+
+                const code = btn.dataset.code;
+                if (!code) return;
+
+                drag.active = true;
+                drag.started = false;
+                drag.startBtn = btn;
+                drag.startState = selected.has(code);
+                drag.startX = e.clientX;
+                drag.startY = e.clientY;
+                drag.targetState = !drag.startState; // 目标状态：与起始相反
+                drag._lastProcessed = null;
+
+                // 起始按钮不立即改变状态，等拖选或点击时再处理
+                // 但给一个视觉反馈
+                btn.classList.add('drag-hover');
+                clearTimeout(btn._dragHoverTimer);
+                btn._dragHoverTimer = setTimeout(() => btn.classList.remove('drag-hover'), 300);
+
+                document.body.style.cursor = 'grabbing';
+            });
+
+            // 全局 mousemove
+            document.addEventListener('mousemove', function(e) {
+                if (!drag.active) return;
+
+                const dx = e.clientX - drag.startX;
+                const dy = e.clientY - drag.startY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                // 检查是否超过阈值
+                if (!drag.started) {
+                    if (dist > drag.threshold) {
+                        drag.started = true;
+                        // 进入拖选模式：处理起始按钮（应用目标状态）
+                        if (drag.startBtn) {
+                            processButton(drag.startBtn, drag.targetState);
+                        }
+                        document.body.style.cursor = 'grabbing';
+                    } else {
+                        // 还没超过阈值，不处理
+                        return;
+                    }
+                }
+
+                // 拖选模式：获取鼠标下的按钮
+                const el = document.elementFromPoint(e.clientX, e.clientY);
+                if (!el) return;
+                const btn = el.closest('.location-btn');
+                if (!btn) return;
+                const code = btn.dataset.code;
+                if (!code) return;
+
+                // 如果是起始按钮，且已经处理过了，跳过（避免重复）
+                // 但起始按钮已经在进入拖选时处理过了，这里不再重复处理
+                if (btn === drag.startBtn) return;
+
+                // 处理按钮
+                processButton(btn, drag.targetState);
+            });
+
+            // 全局 mouseup
+            document.addEventListener('mouseup', function(e) {
+                if (!drag.active) return;
+
+                const wasStarted = drag.started;
+                const btn = drag.startBtn;
+
+                // 清理拖选状态
+                endDrag();
+
+                // 如果从未进入拖选模式（即点击，没有拖选）
+                if (!wasStarted && btn) {
+                    const code = btn.dataset.code;
+                    if (code) {
+                        // 切换状态（点击行为）
+                        toggleLocation(code, btn);
+                    }
+                }
+
+                document.body.style.cursor = '';
+            });
+
+            // 鼠标离开文档时结束拖选（防止卡死）
+            document.addEventListener('mouseleave', function() {
+                if (drag.active) {
+                    endDrag();
+                    document.body.style.cursor = '';
+                }
+            });
+
+            // 窗口失去焦点时结束拖选
+            window.addEventListener('blur', function() {
+                if (drag.active) {
+                    endDrag();
+                    document.body.style.cursor = '';
+                }
+            });
+
+            // 阻止 contextmenu 在拖选时弹出
+            container.addEventListener('contextmenu', function(e) {
+                if (drag.active) e.preventDefault();
+            });
+        }
+
+        // ============================================================
+        //  5. 渲染货位
+        // ============================================================
+        function initShelves() {
+            container.innerHTML = '';
+            for (const [zone, count] of Object.entries(shelves)) {
+                const card = document.createElement('div');
+                card.className = 'zone-card';
+
+                // 头部
+                const header = document.createElement('div');
+                header.className = 'flex items-center justify-between mb-3';
+                header.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <span class="font-bold text-gray-800 text-lg">${zone}区</span>
+                        <span class="bg-gray-100 text-gray-500 text-xs px-2 py-0.5 rounded-full">${count} 位</span>
+                    </div>
+                    <button class="zone-select-all px-3 py-1 border border-gray-300 rounded-md text-xs sm:text-sm text-gray-600 hover:bg-gray-50 transition" data-zone="${zone}">
+                        ✔ 全选
+                    </button>
+                `;
+                card.appendChild(header);
+
+                // 网格
+                const grid = document.createElement('div');
+                grid.className = 'btn-grid';
+
+                for (let i = 1; i <= count; i++) {
+                    const code = zone + i;
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'location-btn border border-gray-300 rounded-md px-1 py-1.5 text-xs sm:text-sm font-medium bg-white text-gray-700 hover:border-blue-400';
+                    btn.textContent = code;
+                    btn.dataset.code = code;
+                    btn.dataset.zone = zone;
+                    grid.appendChild(btn);
+                }
+
+                card.appendChild(grid);
+                container.appendChild(card);
+            }
+
+            // 全选按钮事件
+            document.querySelectorAll('.zone-select-all').forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    selectZone(this.dataset.zone);
+                });
+            });
+
+            // 初始化拖选事件
+            initDragEvents();
+
+            // 分隔符变化
+            sepSelect.addEventListener('change', updateResult);
+
+            // 识别框 Ctrl+Enter 快捷键
+            recognizeInput.addEventListener('keydown', function(e) {
+                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                    e.preventDefault();
+                    recognizeText();
+                }
+            });
+        }
+
+        // ============================================================
+        //  6. 启动
+        // ============================================================
+        initShelves();
+        updateResult();
+
+        // 暴露全局函数给 HTML onclick 使用
+        window.copyResult = copyResult;
+        window.clearAll = clearAll;
+        window.selectZone = selectZone;
+        window.recognizeText = recognizeText;
+
+        console.log('📦 货架缺货统计工具已加载 (支持鼠标拖选 + 模组识别)');
+    </script>
+
+</body>
+</html>
