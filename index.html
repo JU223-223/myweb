@@ -224,7 +224,6 @@
         #result {
             font-family: 'SF Mono', 'Fira Code', monospace;
             background: #f9fafb;
-            min-height: 72px;
             line-height: 1.6;
         }
         #result:focus {
@@ -249,8 +248,42 @@
             pointer-events: auto !important;
         }
 
+        /* 拖拽手柄 */
+        .drag-handle {
+            height: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: ns-resize;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .drag-handle::before {
+            content: '';
+            width: 36px;
+            height: 4px;
+            background: #d1d5db;
+            border-radius: 2px;
+            transition: background 0.15s;
+        }
+        .drag-handle:active::before,
+        .drag-handle.dragging::before {
+            background: #9ca3af;
+        }
+
+        /* 结果区动态高度 */
+        #result {
+            height: var(--result-h, 72px);
+            overflow-y: auto;
+        }
+
         /* 响应式：小屏按钮更紧凑 */
         @media (max-width: 640px) {
+            /* 防止 iOS 聚焦输入框时自动放大 */
+            #recognize-input, #separator {
+                font-size: 16px !important;
+            }
             .location-btn {
                 font-size: 0.7rem;
                 padding: 0.3rem 0.2rem;
@@ -358,6 +391,8 @@
 
     <!-- ========== 底部固定栏 ========== -->
     <div class="bottom-bar">
+        <!-- 拖拽手柄：上下拖动调节缺货清单高度 -->
+        <div id="drag-handle" class="drag-handle"></div>
         <div class="max-w-6xl mx-auto px-4 py-3 sm:py-4">
             <!-- 操作行 -->
             <div class="flex flex-wrap items-center justify-between gap-2 mb-2 sm:mb-3">
@@ -380,6 +415,12 @@
                             <option value="/">斜杠 /</option>
                             <option value="|">竖线 |</option>
                         </select>
+                    </div>
+
+                    <!-- 字体大小调节 -->
+                    <div class="flex items-center gap-1">
+                        <button onclick="adjustFont(-1)" class="px-2.5 py-1.5 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 active:scale-95 transition text-xs sm:text-sm font-bold">A-</button>
+                        <button onclick="adjustFont(1)" class="px-2.5 py-1.5 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 active:scale-95 transition text-xs sm:text-sm font-bold">A+</button>
                     </div>
 
                     <button onclick="copyResult()" class="flex items-center gap-1 px-3 py-1.5 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition text-xs sm:text-sm">
@@ -408,7 +449,7 @@
                     <p class="text-xs sm:text-sm">点击货位标记缺货，或按住鼠标拖选批量标记</p>
                 </div>
                 <!-- 结果文本框 -->
-                <textarea id="result" readonly class="hidden w-full border border-gray-200 rounded-md p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none bg-gray-50" rows="2"></textarea>
+                <textarea id="result" readonly class="hidden w-full border border-gray-200 rounded-md p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"></textarea>
             </div>
         </div>
     </div>
@@ -862,10 +903,78 @@
         }
 
         // ============================================================
-        //  6. 启动
+        //  6. 底部清单高度拖拽调节
+        // ============================================================
+        const dragHandle = document.getElementById('drag-handle');
+        let resultH = 72; // 默认高度 px
+        let _dragStartY = 0;
+        let _dragStartH = 0;
+
+        function applyResultHeight() {
+            document.documentElement.style.setProperty('--result-h', resultH + 'px');
+            // 同步 body padding-bottom，使底部栏不遮挡内容
+            const bar = document.querySelector('.bottom-bar');
+            const barH = bar.offsetHeight;
+            document.body.style.paddingBottom = barH + 'px';
+        }
+
+        function onDragStart(e) {
+            e.preventDefault();
+            dragHandle.classList.add('dragging');
+            const pt = e.touches ? e.touches[0] : e;
+            _dragStartY = pt.clientY;
+            _dragStartH = resultH;
+            document.addEventListener('mousemove', onDragMove);
+            document.addEventListener('mouseup', onDragEnd);
+            document.addEventListener('touchmove', onDragMove, { passive: false });
+            document.addEventListener('touchend', onDragEnd);
+        }
+
+        function onDragMove(e) {
+            e.preventDefault();
+            const pt = e.touches ? e.touches[0] : e;
+            const dy = _dragStartY - pt.clientY; // 向上拖为正
+            let h = _dragStartH + dy;
+            const maxH = window.innerHeight * 0.6;
+            h = Math.max(50, Math.min(maxH, h));
+            resultH = h;
+            applyResultHeight();
+        }
+
+        function onDragEnd() {
+            dragHandle.classList.remove('dragging');
+            document.removeEventListener('mousemove', onDragMove);
+            document.removeEventListener('mouseup', onDragEnd);
+            document.removeEventListener('touchmove', onDragMove);
+            document.removeEventListener('touchend', onDragEnd);
+        }
+
+        dragHandle.addEventListener('mousedown', onDragStart);
+        dragHandle.addEventListener('touchstart', onDragStart, { passive: false });
+
+        // 窗口尺寸变化时重新计算
+        window.addEventListener('resize', applyResultHeight);
+
+        // ============================================================
+        //  6.5 缺货清单字体大小调节
+        // ============================================================
+        let resultFontSize = 14; // 默认 14px
+        const FONT_MIN = 10;
+        const FONT_MAX = 32;
+        const FONT_STEP = 2;
+
+        function adjustFont(delta) {
+            resultFontSize = Math.max(FONT_MIN, Math.min(FONT_MAX, resultFontSize + delta * FONT_STEP));
+            resultEl.style.setProperty('font-size', resultFontSize + 'px', 'important');
+            showToast(`字体: ${resultFontSize}px`);
+        }
+
+        // ============================================================
+        //  7. 启动
         // ============================================================
         initShelves();
         updateResult();
+        applyResultHeight();
 
         // 暴露全局函数给 HTML onclick 使用
         window.copyResult = copyResult;
@@ -874,6 +983,7 @@
         window.recognizeText = recognizeText;
         window.clearRecognizeInput = clearRecognizeInput;
         window.pasteRecognizeInput = pasteRecognizeInput;
+        window.adjustFont = adjustFont;
 
         console.log('📦 货架缺货统计工具已加载 (支持鼠标拖选 + 模组识别)');
     </script>
