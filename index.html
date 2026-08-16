@@ -237,6 +237,15 @@
             user-select: text;
         }
 
+        /* 识别状态文字：允许换行，防止溢出 */
+        #recognize-status {
+            flex: 1;
+            min-width: 0;
+            word-break: break-all;
+            overflow-wrap: break-word;
+            line-height: 1.5;
+        }
+
         /* Toast */
         #toast {
             transition: opacity 0.25s ease, transform 0.25s ease;
@@ -636,11 +645,8 @@
 
             updateResult();
 
-            // 构建状态提示（含重复、未找到提醒）
-            const statusParts = [`✅ 已选中 <b class="text-blue-600">${found.length}</b> 个`];
-            if (duplicates.length > 0) {
-                statusParts.push(`⚠️ 重复 <b class="text-orange-500">${duplicates.length}</b> 个：${duplicates.map(d => `${d}×${dupCount[d]}`).join(' ')}`);
-            }
+            // 状态提示：列出所有已识别货位（按输入顺序），含未找到提醒
+            const statusParts = [`✅ 已选中 <b class="text-blue-600">${found.length}</b> 个：${found.join(' ')}`];
             if (notFound.length > 0) {
                 statusParts.push(`⚠️ 未找到 <b class="text-orange-500">${notFound.length}</b> 个：${notFound.join(' ')}`);
             }
@@ -648,10 +654,15 @@
             recognizeStatus.className = 'text-xs text-gray-500';
 
             // Toast 简要提示
-            const toastParts = [`✅ 识别 ${found.length} 个`];
-            if (duplicates.length > 0) toastParts.push(`重复 ${duplicates.length} 个`);
-            if (notFound.length > 0) toastParts.push(`未找到 ${notFound.length} 个`);
-            showToast(toastParts.join(' · '));
+            showToast(`✅ 成功识别 ${found.length} 个货位`);
+
+            // 重复提醒：弹窗显示
+            if (duplicates.length > 0) {
+                const dupDetail = duplicates.map(d => `  ${d}  出现了 ${dupCount[d]} 次`).join('\n');
+                setTimeout(() => {
+                    alert(`⚠️ 发现 ${duplicates.length} 个重复货位：\n\n${dupDetail}`);
+                }, 300);
+            }
 
             // 滚动到第一个命中的货位
             if (found.length > 0) {
