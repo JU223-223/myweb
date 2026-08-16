@@ -590,14 +590,19 @@
                 return;
             }
 
-            // 转大写 + 去重（保持顺序）
+            // 转大写 + 统计重复 + 去重（保持顺序）
             const codes = [];
             const seen = new Set();
+            const dupCount = {};
+            const duplicates = [];
             matches.forEach(m => {
                 const upper = m.toUpperCase();
                 if (!seen.has(upper)) {
                     seen.add(upper);
                     codes.push(upper);
+                } else {
+                    dupCount[upper] = (dupCount[upper] || 1) + 1;
+                    if (dupCount[upper] === 2) duplicates.push(upper);
                 }
             });
 
@@ -631,16 +636,22 @@
 
             updateResult();
 
-            // 状态提示
-            if (notFound.length > 0) {
-                recognizeStatus.innerHTML = `✅ 已选中 <b class="text-blue-600">${found.length}</b> 个 · ⚠️ 未找到 <b class="text-orange-500">${notFound.length}</b> 个：${notFound.join(' ')}`;
-                recognizeStatus.className = 'text-xs text-gray-500';
-                showToast(`✅ 识别 ${found.length} 个，未找到 ${notFound.length} 个`);
-            } else {
-                recognizeStatus.innerHTML = `✅ 成功识别并选中 <b class="text-blue-600">${found.length}</b> 个货位：${found.join(' ')}`;
-                recognizeStatus.className = 'text-xs text-gray-500';
-                showToast(`✅ 成功识别 ${found.length} 个货位`);
+            // 构建状态提示（含重复、未找到提醒）
+            const statusParts = [`✅ 已选中 <b class="text-blue-600">${found.length}</b> 个`];
+            if (duplicates.length > 0) {
+                statusParts.push(`⚠️ 重复 <b class="text-orange-500">${duplicates.length}</b> 个：${duplicates.map(d => `${d}×${dupCount[d]}`).join(' ')}`);
             }
+            if (notFound.length > 0) {
+                statusParts.push(`⚠️ 未找到 <b class="text-orange-500">${notFound.length}</b> 个：${notFound.join(' ')}`);
+            }
+            recognizeStatus.innerHTML = statusParts.join(' · ');
+            recognizeStatus.className = 'text-xs text-gray-500';
+
+            // Toast 简要提示
+            const toastParts = [`✅ 识别 ${found.length} 个`];
+            if (duplicates.length > 0) toastParts.push(`重复 ${duplicates.length} 个`);
+            if (notFound.length > 0) toastParts.push(`未找到 ${notFound.length} 个`);
+            showToast(toastParts.join(' · '));
 
             // 滚动到第一个命中的货位
             if (found.length > 0) {
